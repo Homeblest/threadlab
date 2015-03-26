@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "help.h"
+#include "csapp.h"
 
 /*********************************************************
  * NOTE TO STUDENTS: Before you do anything else, please
@@ -17,6 +18,15 @@
  * SSN:
  * === End User Information ===
  ********************************************************/
+typedef struct {
+    struct customers **customers;
+    int max;
+    int front;
+    int rear;
+    sem_t mutex;
+    sem_t slots;
+    sem_t items;
+} sbuf_t;
 
 struct chairs
 {
