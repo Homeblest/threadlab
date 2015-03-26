@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "help.h"
-#include "csapp.h"
+//#include "csapp.h"
 
 /*********************************************************
  * NOTE TO STUDENTS: Before you do anything else, please
@@ -18,15 +18,25 @@
  * SSN:
  * === End User Information ===
  ********************************************************/
+
 typedef struct {
-    struct customers **customers;
-    int max;
+    int *customers; // **customers;
+    int n;
     int front;
     int rear;
     sem_t mutex;
     sem_t slots;
     sem_t items;
 } sbuf_t;
+
+
+int sbuf_remove(sbuf_t *sp);
+void sbuf_deinit(sbuf_t *sp);
+void sbuf_init(sbuf_t *sp, int n);
+void sbuf_insert(sbuf_t *sp, int item);
+
+
+sbuf_t chairBuffer; // Available chairs in waiting room
 
 struct chairs
 {
@@ -64,7 +74,7 @@ static void *barber_work(void *arg)
 
     /* TODO: Here you must add you semaphores and locking logic */
     sem_wait(&chairs->barber);
-    customer = chairs->customer[0]; /* TODO: You must choose the customer */
+    customer = sbuf_remove(&chairBuffer); // chairs->customer[0]; /* TODO: You must choose the customer */
     thrlab_prepare_customer(customer, barber->room);
     sem_post(&chairs->chair);
     thrlab_sleep(5 * (customer->hair_length - customer->hair_goal));
@@ -80,6 +90,9 @@ static void *barber_work(void *arg)
  */
 static void setup(struct simulator *simulator)
 {
+  //Veit ekki alveg með þetta..
+  sbuf_init(&chairBuffer, thrlab_get_num_chairs());
+
   struct chairs *chairs = &simulator->chairs;
 
   /* Setup semaphores*/
@@ -145,7 +158,8 @@ static void customer_arrived(struct customer *customer, void *arg)
   sem_wait(&chairs->mutex);
 
   thrlab_accept_customer(customer);
-  chairs->customer[0] = customer;
+  sbuf_insert(&chairBuffer, customer);
+  //chairs->customer[0] = customer;
 
   sem_post(&chairs->mutex);
   sem_post(&chairs->barber);
@@ -166,3 +180,51 @@ int main (int argc, char **argv)
 
   return EXIT_SUCCESS;
 }
+
+
+//===============SBUF===============
+void sbuf_init(sbuf_t *sp, int n)
+{
+    sp->customers = Calloc(n, sizeof(int)); 
+    sp->n = n;                       /* Buffer holds max of n items */
+    sp->front = sp->rear = 0;        /* Empty buffer iff front == rear */
+    Sem_init(&sp->mutex, 0, 1);      /* Binary semaphore for locking */
+    Sem_init(&sp->slots, 0, n);      /* Initially, buf has n empty slots */
+    Sem_init(&sp->items, 0, 0);      /* Initially, buf has zero data items */
+}
+/* $end sbuf_init */
+
+/* Clean up buffer sp */
+/* $begin sbuf_deinit */
+void sbuf_deinit(sbuf_t *sp)
+{
+    Free(sp->customers);
+}
+/* $end sbuf_deinit */
+
+/* Insert item onto the rear of shared buffer sp */
+/* $begin sbuf_insert */
+void sbuf_insert(sbuf_t *sp, int item)
+{
+    P(&sp->slots);                          /* Wait for available slot */
+    P(&sp->mutex);                          /* Lock the buffer */
+    sp->customers[(++sp->rear)%(sp->n)] = item;   /* Insert the item */
+    V(&sp->mutex);                          /* Unlock the buffer */
+    V(&sp->items);                          /* Announce available item */
+}
+/* $end sbuf_insert */
+
+/* Remove and return the first item from buffer sp */
+/* $begin sbuf_remove */
+int sbuf_remove(sbuf_t *sp)
+{
+    int item;
+    P(&sp->items);                          /* Wait for available item */
+    P(&sp->mutex);                          /* Lock the buffer */
+    item = sp->customers[(++sp->front)%(sp->n)];  /* Remove the item */
+    V(&sp->mutex);                          /* Unlock the buffer */
+    V(&sp->slots);                          /* Announce available slot */
+    return item;
+}
+/* $end sbuf_remove */
+/* $end sbufc */
