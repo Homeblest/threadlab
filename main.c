@@ -128,7 +128,10 @@ static void customer_arrived(struct customer *customer, void *arg)
 
 
   /* TODO: Accept if there is an available chair */
-  sem_wait(&chairs->chair);
+  // Check if any chairs are available. If not, reject customer
+  if (sem_trywait(&chairs->chair) == -1) {
+	thrlab_reject_customer(customer);
+  }
   sem_wait(&chairs->mutex);
 
   thrlab_accept_customer(customer);
