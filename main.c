@@ -74,9 +74,10 @@ static void setup(struct simulator *simulator)
 
   /* Setup semaphores*/
   chairs->max = thrlab_get_num_chairs();
+  int num_barbers = thrlab_get_num_barbers();
 
   sem_init(&chairs->mutex, 0, 1);
-  sem_init(&chairs->barber, 0, 0);
+  sem_init(&chairs->barber, 0, num_barbers);
   sem_init(&chairs->chair, 0, chairs->max);
 
   /* Create chairs*/
@@ -119,6 +120,7 @@ static void cleanup(struct simulator *simulator)
  */
 static void customer_arrived(struct customer *customer, void *arg)
 {
+
   struct simulator *simulator = arg;
   struct chairs *chairs = &simulator->chairs;
 
@@ -134,8 +136,8 @@ static void customer_arrived(struct customer *customer, void *arg)
 
   sem_post(&chairs->mutex);
   sem_post(&chairs->barber);
-
   sem_wait(&customer->mutex);
+
 }
 int main (int argc, char **argv)
 {
