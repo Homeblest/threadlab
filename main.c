@@ -135,8 +135,6 @@ static void customer_arrived(struct customer *customer, void *arg)
   sem_post(&chairs->mutex);
   sem_post(&chairs->barber);
 
-  thrlab_accept_customer(customer);
-
   sem_wait(&customer->mutex);
 }
 int main (int argc, char **argv)
