@@ -141,7 +141,10 @@ static void cleanup(struct simulator *simulator)
 {
   /* Free chairs */
   free(simulator->chairs.customer);
-
+  // Free the semaphores
+  sem_destroy(&simulator->chairs.mutex);
+  sem_destroy(&simulator->chairs.slots);
+  sem_destroy(&simulator->chairs.items);
   /* Free barber thread data */
   free(simulator->barber);
   free(simulator->barberThread);
