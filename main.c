@@ -46,6 +46,34 @@ struct simulator
   struct barber **barber;
 };
 
+
+/**
+ * Called in a new thread each time a customer has arrived.
+ */
+static void customer_arrived(struct customer *customer, void *arg)
+{
+  struct simulator *simulator = arg;
+  struct chairs *chairs = &simulator->chairs;
+
+  sem_init(&customer->mutex, 0, 0);
+
+  if (sem_trywait(&chairs->slots) == -1)	/* Check if available slot. If not reject */
+  {
+	thrlab_reject_customer(customer);
+  }
+  else 
+  {
+    sem_wait(&chairs->mutex);		/* Lock the buffer */
+
+    thrlab_accept_customer(customer);
+	chairs->customers[(++chairs->rear)%(chairs->max)] = customer;   /* Insert the item */
+    
+	sem_post(&chairs->mutex);		/* Unlock the buffer */
+    sem_post(&chairs->items);		/* Announce available item for barber to fetch */
+    sem_wait(&customer->mutex);
+  }
+}
+
 static void *barber_work(void *arg)
 {
   struct barber *barber = arg;
@@ -79,7 +107,8 @@ static void setup(struct simulator *simulator)
 
   /* Setup semaphores*/
   chairs->max = thrlab_get_num_chairs();
-//  int num_barbers = thrlab_get_num_barbers();
+  chairs->front = 0;
+  chairs->rear = 0;
 
   sem_init(&chairs->mutex, 0, 1);
   //sem_init(&chairs->chair, 0, chairs->max);
@@ -120,32 +149,6 @@ static void cleanup(struct simulator *simulator)
   free(simulator->barberThread);
 }
 
-/**
- * Called in a new thread each time a customer has arrived.
- */
-static void customer_arrived(struct customer *customer, void *arg)
-{
-  struct simulator *simulator = arg;
-  struct chairs *chairs = &simulator->chairs;
-
-  sem_init(&customer->mutex, 0, 0);
-
-  if (sem_trywait(&chairs->slots) == -1)	/* Check if available slot. If not reject */
-  {
-	thrlab_reject_customer(customer);
-  }
-  else 
-  {
-    sem_wait(&chairs->mutex);		/* Lock the buffer */
-
-    thrlab_accept_customer(customer);
-	chairs->customers[(++chairs->rear)%(chairs->max)] = customer;   /* Insert the item */
-    
-	sem_post(&chairs->mutex);		/* Unlock the buffer */
-    sem_post(&chairs->items);		/* Announce available item for barber to fetch */
-    sem_wait(&customer->mutex);
-  }
-}
 int main (int argc, char **argv)
 {
   struct simulator simulator;
