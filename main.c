@@ -18,6 +18,10 @@
  * === End User Information ===
  ********************************************************/
 
+/*
+  This is our ring buffer, this holds information about
+  the barbershop waiting room status.
+*/
 struct chairs
 {
     struct customer **customer; /* Array of customers */
@@ -99,8 +103,12 @@ static void setup(struct simulator *simulator)
       barber->room = i;
       barber->simulator = simulator;
       simulator->barber[i] = barber;
-      pthread_create(&simulator->barberThread[i], 0, barber_work, barber);
-      pthread_detach(simulator->barberThread[i]);
+      if(pthread_create(&simulator->barberThread[i], 0, barber_work, barber) != 0) {
+     	fprintf(stderr, "Could not create barber thread\n");
+      };
+      if(pthread_detach(simulator->barberThread[i]) != 0) {
+      	fprintf(stderr, "Could not detach barber thread\n");
+      };
     }
 }
 /**
