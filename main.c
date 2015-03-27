@@ -46,6 +46,10 @@ struct simulator
 
 /**
  * Called in a new thread each time a customer has arrived.
+ * Sits the customer down only if there is an available chair.
+ * if not, the customer is rejected.
+ * Uses semaphore locking chairs->mutex to guarantee the chairs
+ * are correctly represented in the chairs struct.
  */
 static void customer_arrived(struct customer *customer, void *arg)
 {
@@ -59,17 +63,22 @@ static void customer_arrived(struct customer *customer, void *arg)
     thrlab_reject_customer(customer);
   } else {
     sem_wait(&chairs->mutex); // Lock the chairs
-
+    
+    // The customer is welcome, he can sit down
     thrlab_accept_customer(customer);
     // Choose a seat for the customer
     chairs->customer[(++chairs->rear) % (chairs->max)] = customer;
 
     sem_post(&chairs->mutex); // Unlock the chairs
     sem_post(&chairs->items); // Announce available customer
-    sem_wait(&customer->mutex);
+    sem_wait(&customer->mutex); // The customer waits
   }
 }
-
+/**
+ * Grabs a customer each time chairs->items semaphore is available
+ * Then locks the mutex so the customer can stand up and free the chair
+ * Then preps the customer, cuts and dismisses him, setting the customer mutex.
+ */
 static void *barber_work(void *arg)
 {
   struct barber *barber = arg;
@@ -78,6 +87,7 @@ static void *barber_work(void *arg)
 
   /* Main barber loop */
   while (true) {
+
     sem_wait(&chairs->items); /* Wait for available item */
     sem_wait(&chairs->mutex); /* Lock the buffer */
 
@@ -87,9 +97,10 @@ static void *barber_work(void *arg)
     sem_post(&chairs->slots); /* Announce available slot */
 
     thrlab_prepare_customer(customer, barber->room);
-    thrlab_sleep(5 * (customer->hair_length - customer->hair_goal));
-    thrlab_dismiss_customer(customer, barber->room);
-    sem_post(&customer->mutex);
+    thrlab_sleep(5 * (customer->hair_length - customer->hair_goal)); // wait the allotted time
+    thrlab_dismiss_customer(customer, barber->room); // Hair cutting complete
+
+    sem_post(&customer->mutex); // The customer is free to go
   }
   return NULL;
 }
@@ -101,11 +112,12 @@ static void setup(struct simulator *simulator)
 {
   struct chairs *chairs = &simulator->chairs;
 
-  /* Setup semaphores*/
+  /* Setup chairs struct buffer */
   chairs->max = thrlab_get_num_chairs();
   chairs->front = 0;
   chairs->rear = 0;
 
+   /* Setup semaphores*/
   sem_init(&chairs->mutex, 0, 1);
   sem_init(&chairs->slots, 0, chairs->max);
   sem_init(&chairs->items, 0, 0);
@@ -141,7 +153,7 @@ static void cleanup(struct simulator *simulator)
 {
   /* Free chairs */
   free(simulator->chairs.customer);
-  // Free the semaphores
+  // Free the semaphores we initialized in setup
   sem_destroy(&simulator->chairs.mutex);
   sem_destroy(&simulator->chairs.slots);
   sem_destroy(&simulator->chairs.items);
