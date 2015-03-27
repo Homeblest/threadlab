@@ -14,30 +14,11 @@
  * === User information ===
  * User 1: Hjaltil13
  * SSN: 1209912809
- * User 2:
- * SSN:
+ * User 2: arnia13
+ * SSN: 0804922789
  * === End User Information ===
  ********************************************************/
-/*
-typedef struct {
-    int *customers; // **customers;
-    int n;
-    int front;
-    int rear;
-    sem_t mutex;
-    sem_t slots;
-    sem_t items;
-} sbuf_t;
 
-
-int sbuf_remove(sbuf_t *sp);
-void sbuf_deinit(sbuf_t *sp);
-void sbuf_init(sbuf_t *sp, int n);
-void sbuf_insert(sbuf_t *sp, int item);
-
-
-sbuf_t chairBuffer; // Available chairs in waiting room
-*/
 
 struct chairs
 {
@@ -48,10 +29,7 @@ struct chairs
   sem_t slots;
   sem_t items;
   sem_t mutex;
-  sem_t barber;
-  //sem_t chair;
-  /* TODO: Add more variables related to threads */
-  /* Hint: Think of the consumer producer thread problem */
+  //sem_t chair; kannski þarf að bæta þessu við..
 };
 
 struct barber
@@ -76,17 +54,18 @@ static void *barber_work(void *arg)
 
   /* Main barber loop */
   while (true) {
+    sem_wait(&chairs->items);                          /* Wait for available item */
+    sem_wait(&chairs->mutex);                          /* Lock the buffer */
+    
+	customer = chairs->customers[(++chairs->front)%(chairs->max)];  /* Remove the item */ 
+    
+	sem_post(&chairs->mutex);			               /* Unlock the buffer */
+    sem_post(&chairs->slots);                          /* Announce available slot */
 
-    /* TODO: Here you must add you semaphores and locking logic */
-    sem_wait(&chairs->barber);
-    customer =  chairs->customers[(++chairs->front)%(chairs->max)];  /* Remove the item */ 
-//chairs->customer[sbuf_remove(&chairBuffer)]; // chairs->customer[0]; /* TODO: You must choose the customer */
     thrlab_prepare_customer(customer, barber->room);
-    sem_post(&chairs->slots);
     thrlab_sleep(5 * (customer->hair_length - customer->hair_goal));
     thrlab_dismiss_customer(customer, barber->room);
     sem_post(&customer->mutex);
-        
   }
   return NULL;
 }
@@ -96,9 +75,6 @@ static void *barber_work(void *arg)
  */
 static void setup(struct simulator *simulator)
 {
-  //Veit ekki alveg með þetta..
-  //sbuf_init(&chairBuffer, thrlab_get_num_chairs());
-
   struct chairs *chairs = &simulator->chairs;
 
   /* Setup semaphores*/
@@ -106,7 +82,6 @@ static void setup(struct simulator *simulator)
 //  int num_barbers = thrlab_get_num_barbers();
 
   sem_init(&chairs->mutex, 0, 1);
-  sem_init(&chairs->barber, 0, 0);
   //sem_init(&chairs->chair, 0, chairs->max);
   sem_init(&chairs->slots, 0, chairs->max);
   sem_init(&chairs->items, 0, 0);
@@ -155,27 +130,20 @@ static void customer_arrived(struct customer *customer, void *arg)
 
   sem_init(&customer->mutex, 0, 0);
 
-  /* TODO: Accept if there is an available chair */
-  // Check if any chairs are available. If not, reject customer
-  if (sem_trywait(&chairs->slots) == -1)
+  if (sem_trywait(&chairs->slots) == -1)	/* Check if available slot. If not reject */
   {
 	thrlab_reject_customer(customer);
   }
   else 
   {
-    sem_wait(&chairs->slots);  
-    sem_wait(&chairs->mutex);
+    sem_wait(&chairs->mutex);		/* Lock the buffer */
 
     thrlab_accept_customer(customer);
-    //sbuf_insert(&chairs->customers, customer);
-    //chairs->customer[0] = customer;
 	chairs->customers[(++chairs->rear)%(chairs->max)] = customer;   /* Insert the item */
     
-	sem_post(&chairs->mutex);
-    sem_post(&chairs->barber);
-	sem_post(&chairs->slots);
+	sem_post(&chairs->mutex);		/* Unlock the buffer */
+    sem_post(&chairs->items);		/* Announce available item for barber to fetch */
     sem_wait(&customer->mutex);
-
   }
 }
 int main (int argc, char **argv)
